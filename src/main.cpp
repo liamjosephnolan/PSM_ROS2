@@ -13,10 +13,13 @@
 #define GIMBAL_JOINT_INDEX 3  // right_gimbal_3
 #define JOINT_NAME_MAX 10     // Max joints expected
 #define NAME_LENGTH_MAX 30    // Max length of joint name
+
+// === Gimbal Limit Angles ===
+// These values are based on the physical limits of the gimbal and roll servo
 #define GIMBAL_DEG_MIN -125
 #define GIMBAL_DEG_MAX 125
 #define SERVO_ANGLE_MIN 0
-#define SERVO_ANGLE_MAX 180
+#define SERVO_ANGLE_MAX 360
 
 // === ROS 2 Stuff ===
 rcl_subscription_t joint_state_subscriber;
@@ -56,26 +59,16 @@ void joint_state_callback(const void *msgin) {
 
     gimbal3_servo.write(servo_angle);
 
-    // Debug output
-    Serial.print("right_gimbal_3: ");
-    Serial.print(g3, 2);
-    Serial.print(" deg -> Servo angle: ");
-    Serial.println(servo_angle);
-  } else {
-    Serial.println("Warning: Not enough joint positions received.");
-  }
 }
 
 // === Setup ===
 void setup() {
-  Serial.begin(115200);
+  Serial.begin(921600);
   set_microros_serial_transports(Serial);
   delay(2000);
 
-  Serial.println("Initializing gimbal servo node...");
-
   gimbal3_servo.attach(SERVO_PIN);
-  gimbal3_servo.write(90);  // Neutral
+  gimbal3_servo.write(180);  // Neutral
   delay(500);
 
   allocator = rcl_get_default_allocator();
@@ -130,6 +123,5 @@ void setup() {
 
 // === Loop ===
 void loop() {
-  RCSOFTCHECK(rclc_executor_spin_some(&executor, RCL_MS_TO_NS(10)));
-  delay(10);
+  RCSOFTCHECK(rclc_executor_spin_some(&executor, 0));
 }

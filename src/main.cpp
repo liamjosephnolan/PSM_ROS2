@@ -59,6 +59,7 @@ void joint_state_callback(const void *msgin) {
 
     gimbal3_servo.write(servo_angle);
 
+  }
 }
 
 // === Setup ===

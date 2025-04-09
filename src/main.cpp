@@ -14,8 +14,17 @@
 #define SERVO3_PIN 11 // Wrist roll
 #define SERVO4_PIN 12 // Wrist pitch
 
-#define GIMBAL_DEG_MIN -125
-#define GIMBAL_DEG_MAX 125
+// Gimbal angle ranges (adjustable)
+#define G0_MIN 0 //TODO Fix G0 angle stuff
+#define G0_MAX 5
+#define G1_MIN -40
+#define G1_MAX 40
+#define G2_MIN -40
+#define G2_MAX 40
+#define G3_MIN -125 
+#define G3_MAX 125
+
+// Servo angle range
 #define SERVO_ANGLE_MIN 0
 #define SERVO_ANGLE_MAX 180
 
@@ -34,7 +43,8 @@ rcl_node_t node;
 Servo servo1, servo2, servo3, servo4;
 
 // Servo offsets (calibration values)
-float servo_off[4] = {90, 90, 90, 90}; // Adjust these based on your setup
+int servo_off1 = 100, servo_off2 = 97, servo_off3 = 90, servo_off4 = 92;
+int servo_off[4] = { servo_off1, servo_off2, servo_off3, servo_off4 };
 
 // Servo values
 int servo_val[4] = {0, 0, 0, 0};
@@ -51,8 +61,8 @@ void error_loop() {
 }
 
 // === Servo Mapping ===
-int map_gimbal_to_servo(double gimbal_angle) {
-  int servo_angle = map((int)gimbal_angle, GIMBAL_DEG_MIN, GIMBAL_DEG_MAX, SERVO_ANGLE_MIN, SERVO_ANGLE_MAX);
+int map_gimbal_to_servo(double gimbal_angle, double gimbal_min, double gimbal_max) {
+  int servo_angle = map((int)gimbal_angle, gimbal_min, gimbal_max, SERVO_ANGLE_MIN, SERVO_ANGLE_MAX);
   return constrain(servo_angle, SERVO_ANGLE_MIN, SERVO_ANGLE_MAX);
 }
 
@@ -75,13 +85,13 @@ void joint_state_callback(const void *msgin) {
   float s1 = -g0 / 1.4 + (servo_off[0] - 90);
   float s2 = g1 / 1.0 + (servo_off[1] - 90);
   float s3 = (2 * g2 - g3 + 1.5 * s2) / 2.0 + (servo_off[2] - 90);
-  float s4 = g3 + s3 + (servo_off[3] - 90);
+  float s4 = g3;
 
-  // Map and constrain servo values
-  servo_val[0] = constrain(map(s1, -90, 90, 0, 180), 0, 180);
-  servo_val[1] = constrain(map(s2, -90, 90, 0, 180), 0, 180);
-  servo_val[2] = constrain(map(s3, -90, 90, 0, 180), 0, 180);
-  servo_val[3] = constrain(map(s4, -90, 90, 0, 180), 0, 180);
+  // Map and constrain servo values using adjustable gimbal ranges
+  servo_val[0] = map_gimbal_to_servo(s1, G0_MIN, G0_MAX);
+  servo_val[1] = map_gimbal_to_servo(s2, G1_MIN, G1_MAX);
+  servo_val[2] = map_gimbal_to_servo(s3, G2_MIN, G2_MAX);
+  servo_val[3] = map_gimbal_to_servo(s4, G3_MIN, G3_MAX);
 
   // Write to servos
   servo1.write(servo_val[0]);

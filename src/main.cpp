@@ -16,7 +16,7 @@
 
 // Gimbal angle ranges (adjustable)
 #define G0_MIN 0 //TODO Fix G0 angle stuff
-#define G0_MAX 5
+#define G0_MAX 75
 #define G1_MIN -40
 #define G1_MAX 40
 #define G2_MIN -40
@@ -25,8 +25,8 @@
 #define G3_MAX 125
 
 // Servo angle range
-#define SERVO_ANGLE_MIN 0
-#define SERVO_ANGLE_MAX 180
+#define SERVO_ANGLE_MIN -360
+#define SERVO_ANGLE_MAX 360
 
 #define JOINT_NAME_MAX 10
 #define NAME_LENGTH_MAX 30
@@ -61,8 +61,8 @@ void error_loop() {
 }
 
 // === Servo Mapping ===
-int map_gimbal_to_servo(double gimbal_angle, double gimbal_min, double gimbal_max) {
-  int servo_angle = map((int)gimbal_angle, gimbal_min, gimbal_max, SERVO_ANGLE_MIN, SERVO_ANGLE_MAX);
+int map_gimbal_to_servo(double gimbal_angle, double gimbal_min, double gimbal_max, double max_angle, double min_angle) {
+  int servo_angle = map((int)gimbal_angle, gimbal_min, gimbal_max, max_angle, min_angle);
   return constrain(servo_angle, SERVO_ANGLE_MIN, SERVO_ANGLE_MAX);
 }
 
@@ -74,30 +74,29 @@ void joint_state_callback(const void *msgin) {
     Serial.println("[WARN] Invalid joint state message.");
     return;
   }
-
   // Extract joint positions
-  float g0 = msg->position.data[6]; // right_gimbal_0
-  float g1 = msg->position.data[5]; // right_gimbal_1
-  float g2 = msg->position.data[4]; // right_gimbal_2
-  float g3 = msg->position.data[3]; // right_gimbal_3
+  float g0 = msg->position.data[6]; // Grasper open/close (0–90)
+  float g1 = msg->position.data[5]; // Wrist tilt (-40 to 40)
+  float g2 = msg->position.data[4]; // Grasper tilt (-40 to 40)
+  float g3 = msg->position.data[3]; // Roll (-125 to 125)
 
-  // Calculate servo positions
-  float s1 = -g0 / 1.4 + (servo_off[0] - 90);
-  float s2 = g1 / 1.0 + (servo_off[1] - 90);
-  float s3 = (2 * g2 - g3 + 1.5 * s2) / 2.0 + (servo_off[2] - 90);
-  float s4 = g3;
+  g3 = map_gimbal_to_servo(g3, G3_MIN, G0_MAX, -180, 180); // Map roll to servo range
+  g2 = map_gimbal_to_servo(g2, G2_MIN, G2_MAX, -90, 90); // Map grasper tilt to servo range
+  g1 = map_gimbal_to_servo(g1, G1_MIN, G1_MAX, -90, 90); // Map wrist tilt to servo range
+  g0 = map_gimbal_to_servo(g0, G0_MIN, G0_MAX, -90, 90);  // Map grasper open/close to servo range
 
-  // Map and constrain servo values using adjustable gimbal ranges
-  servo_val[0] = map_gimbal_to_servo(s1, G0_MIN, G0_MAX);
-  servo_val[1] = map_gimbal_to_servo(s2, G1_MIN, G1_MAX);
-  servo_val[2] = map_gimbal_to_servo(s3, G2_MIN, G2_MAX);
-  servo_val[3] = map_gimbal_to_servo(s4, G3_MIN, G3_MAX);
+  // Map and constrain servo values
+  servo_val[0] = -g0/2 + g1 + servo_off[0];
+  servo_val[1] = g0/2 + g1 + servo_off[1];
+  servo_val[2] = g2 + servo_off[2];
+  servo_val[3] = g3 + servo_off[3];
 
   // Write to servos
   servo1.write(servo_val[0]);
   servo2.write(servo_val[1]);
   servo3.write(servo_val[2]);
   servo4.write(servo_val[3]);
+
 }
 
 // === Setup ===

@@ -1,39 +1,27 @@
 #include <Arduino.h>
 #include <micro_ros_platformio.h>
 #include <Servo.h>
+#include <Encoder.h>
 
 #include <rcl/rcl.h>
 #include <rclc/rclc.h>
 #include <rclc/executor.h>
+#include <std_msgs/msg/int32_multi_array.h>
 #include <sensor_msgs/msg/joint_state.h>
+#include <std_msgs/msg/string.h>
 #include <rosidl_runtime_c/string_functions.h>
+#include "encoder_reader.h"
+#include "config.h"
 
-// === Configuration ===
-#define SERVO1_PIN 9  // Right grasper finger
-#define SERVO2_PIN 10 // Left grasper finger
-#define SERVO3_PIN 11 // Wrist roll
-#define SERVO4_PIN 12 // Wrist pitch
-
-// Gimbal angle ranges (adjustable)
-#define G0_MIN 0 //TODO Fix G0 angle stuff
-#define G0_MAX 75
-#define G1_MIN -40
-#define G1_MAX 40
-#define G2_MIN -40
-#define G2_MAX 40
-#define G3_MIN -125 
-#define G3_MAX 125
-
-// Servo angle range
-#define SERVO_ANGLE_MIN -360
-#define SERVO_ANGLE_MAX 360
-
-#define JOINT_NAME_MAX 10
-#define NAME_LENGTH_MAX 30
+// === Pin Definitions Contained in config.h ===
 
 // === ROS 2 Stuff ===
 rcl_subscription_t joint_state_subscriber;
+rcl_publisher_t sensor_data_publisher;
+rcl_publisher_t debug_publisher;
 sensor_msgs__msg__JointState received_joint_state;
+std_msgs__msg__Int32MultiArray sensor_data_msg;
+std_msgs__msg__String debug_msg;
 rclc_executor_t executor;
 rclc_support_t support;
 rcl_allocator_t allocator;
@@ -41,6 +29,8 @@ rcl_node_t node;
 
 // === Servo Control ===
 Servo servo1, servo2, servo3, servo4;
+
+
 
 // Servo offsets (calibration values)
 int servo_off1 = 100, servo_off2 = 97, servo_off3 = 90, servo_off4 = 92;
@@ -53,9 +43,10 @@ int servo_val[4] = {0, 0, 0, 0};
 #define RCCHECK(fn) { rcl_ret_t rc = fn; if (rc != RCL_RET_OK) error_loop(); }
 #define RCSOFTCHECK(fn) { rcl_ret_t rc = fn; if (rc != RCL_RET_OK) {} }
 
+// === Error Handling ===
 void error_loop() {
   while (1) {
-    Serial.println("Error occurred. Looping...");
+    publish_debug_message("Error occurred!");
     delay(1000);
   }
 }
@@ -71,23 +62,25 @@ void joint_state_callback(const void *msgin) {
   const sensor_msgs__msg__JointState *msg = (const sensor_msgs__msg__JointState *)msgin;
 
   if (msg->position.size < 7 || msg->position.data == NULL) {
-    Serial.println("[WARN] Invalid joint state message.");
+    publish_debug_message("[WARN] Invalid joint state message.");
     return;
   }
+
   // Extract joint positions
   float g0 = msg->position.data[6]; // Grasper open/close (0–90)
   float g1 = msg->position.data[5]; // Wrist tilt (-40 to 40)
   float g2 = msg->position.data[4]; // Grasper tilt (-40 to 40)
   float g3 = msg->position.data[3]; // Roll (-125 to 125)
 
-  g3 = map_gimbal_to_servo(g3, G3_MIN, G0_MAX, -180, 180); // Map roll to servo range
-  g2 = map_gimbal_to_servo(g2, G2_MIN, G2_MAX, -90, 90); // Map grasper tilt to servo range
-  g1 = map_gimbal_to_servo(g1, G1_MIN, G1_MAX, -90, 90); // Map wrist tilt to servo range
-  g0 = map_gimbal_to_servo(g0, G0_MIN, G0_MAX, -90, 90);  // Map grasper open/close to servo range
+  // Map gimbal angles to servo angles
+  g3 = map_gimbal_to_servo(g3, G3_MIN, G3_MAX, -180, 180); // Map roll to servo range
+  g2 = map_gimbal_to_servo(g2, G2_MIN, G2_MAX, -90, 90);   // Map grasper tilt to servo range
+  g1 = map_gimbal_to_servo(g1, G1_MIN, G1_MAX, -90, 90);   // Map wrist tilt to servo range
+  g0 = map_gimbal_to_servo(g0, G0_MIN, G0_MAX, -90, 90);   // Map grasper open/close to servo range
 
   // Map and constrain servo values
-  servo_val[0] = -g0/2 + g1 + servo_off[0];
-  servo_val[1] = g0/2 + g1 + servo_off[1];
+  servo_val[0] = -g0 / 2 + g1 + servo_off[0];
+  servo_val[1] = g0 / 2 + g1 + servo_off[1];
   servo_val[2] = g2 + servo_off[2];
   servo_val[3] = g3 + servo_off[3];
 
@@ -96,7 +89,13 @@ void joint_state_callback(const void *msgin) {
   servo2.write(servo_val[1]);
   servo3.write(servo_val[2]);
   servo4.write(servo_val[3]);
+}
 
+// === Debug Message Function ===
+void publish_debug_message(const char *message) {
+  snprintf(debug_msg.data.data, debug_msg.data.capacity, "%s", message);
+  debug_msg.data.size = strlen(debug_msg.data.data);
+  RCSOFTCHECK(rcl_publish(&debug_publisher, &debug_msg, NULL));
 }
 
 // === Setup ===
@@ -121,7 +120,7 @@ void setup() {
   // Initialize micro-ROS
   allocator = rcl_get_default_allocator();
   RCCHECK(rclc_support_init(&support, 0, NULL, &allocator));
-  RCCHECK(rclc_node_init_default(&node, "gimbal3_servo_node", "", &support));
+  RCCHECK(rclc_node_init_default(&node, "psm_sensor_node", "", &support));
 
   // Create subscriber for joint states
   RCCHECK(rclc_subscription_init_default(
@@ -129,6 +128,30 @@ void setup() {
     &node,
     ROSIDL_GET_MSG_TYPE_SUPPORT(sensor_msgs, msg, JointState),
     "/mtm_joint_states"));
+
+  // Create publisher for sensor data
+  RCCHECK(rclc_publisher_init_default(
+    &sensor_data_publisher,
+    &node,
+    ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Int32MultiArray),
+    "/psm_sensor_data"));
+
+  // Create publisher for debug messages
+  RCCHECK(rclc_publisher_init_default(
+    &debug_publisher,
+    &node,
+    ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, String),
+    "/psm_debug"));
+
+  // Initialize sensor data message
+  sensor_data_msg.data.data = (int32_t *)malloc(3 * sizeof(int32_t)); // 3 encoders
+  sensor_data_msg.data.size = 3;
+  sensor_data_msg.data.capacity = 3;
+
+  // Initialize debug message
+  debug_msg.data.data = (char *)malloc(128 * sizeof(char)); // Allocate space for debug messages
+  debug_msg.data.size = 0;
+  debug_msg.data.capacity = 128;
 
   // === Init message fields ===
   memset(&received_joint_state, 0, sizeof(sensor_msgs__msg__JointState));
@@ -167,10 +190,21 @@ void setup() {
     &joint_state_callback,
     ON_NEW_DATA));
 
-  Serial.println("Gimbal3 servo node ready and listening!");
+  // Publish debug message
+  publish_debug_message("PSM Sensor Node ready and listening!");
+
 }
 
 // === Loop ===
 void loop() {
+  // Publish encoder data
+  sensor_data_msg.data.data[0] = Enc1.read();
+  sensor_data_msg.data.data[1] = Enc2.read();
+  sensor_data_msg.data.data[2] = Enc3.read();
+  RCSOFTCHECK(rcl_publish(&sensor_data_publisher, &sensor_data_msg, NULL));
+
+
+  // Spin executor
   RCSOFTCHECK(rclc_executor_spin_some(&executor, 0));
+  delay(5);
 }

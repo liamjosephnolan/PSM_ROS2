@@ -2,7 +2,7 @@
 #include <micro_ros_platformio.h>
 #include <Servo.h>
 #include <Encoder.h>
-
+#include "CytronMotorDriver.h"
 #include <rcl/rcl.h>
 #include <rclc/rclc.h>
 #include <rclc/executor.h>
@@ -13,7 +13,8 @@
 #include "encoder_reader.h"
 #include "config.h"
 
-// === Pin Definitions Contained in config.h ===
+// Declare the home_motors function defined in homing.cpp
+extern void home_motors();
 
 // === ROS 2 Stuff ===
 rcl_subscription_t joint_state_subscriber;
@@ -30,7 +31,11 @@ rcl_node_t node;
 // === Servo Control ===
 Servo servo1, servo2, servo3, servo4;
 
-
+// Motor driver configuration
+CytronMD motor1(PWM_DIR, DC1_PWM, DC1_DIR);
+CytronMD motor2(PWM_DIR, DC2_PWM, DC2_DIR);
+CytronMD motor3(PWM_DIR, DC3_PWM, DC3_DIR);
+CytronMD motor[3] = { motor1, motor2, motor3 };
 
 // Servo offsets (calibration values)
 int servo_off1 = 100, servo_off2 = 97, servo_off3 = 90, servo_off4 = 92;
@@ -42,6 +47,13 @@ int servo_val[4] = {0, 0, 0, 0};
 // === Macros ===
 #define RCCHECK(fn) { rcl_ret_t rc = fn; if (rc != RCL_RET_OK) error_loop(); }
 #define RCSOFTCHECK(fn) { rcl_ret_t rc = fn; if (rc != RCL_RET_OK) {} }
+
+// === Debug Message Function ===
+void publish_debug_message(const char *message) {
+  snprintf(debug_msg.data.data, debug_msg.data.capacity, "%s", message);
+  debug_msg.data.size = strlen(debug_msg.data.data);
+  RCSOFTCHECK(rcl_publish(&debug_publisher, &debug_msg, NULL));
+}
 
 // === Error Handling ===
 void error_loop() {
@@ -56,6 +68,8 @@ int map_gimbal_to_servo(double gimbal_angle, double gimbal_min, double gimbal_ma
   int servo_angle = map((int)gimbal_angle, gimbal_min, gimbal_max, max_angle, min_angle);
   return constrain(servo_angle, SERVO_ANGLE_MIN, SERVO_ANGLE_MAX);
 }
+
+//TODO: Homing sequence for motors
 
 // === Callback ===
 void joint_state_callback(const void *msgin) {
@@ -91,11 +105,28 @@ void joint_state_callback(const void *msgin) {
   servo4.write(servo_val[3]);
 }
 
-// === Debug Message Function ===
-void publish_debug_message(const char *message) {
-  snprintf(debug_msg.data.data, debug_msg.data.capacity, "%s", message);
-  debug_msg.data.size = strlen(debug_msg.data.data);
-  RCSOFTCHECK(rcl_publish(&debug_publisher, &debug_msg, NULL));
+// Function to check limit switch states and publish their status
+void publish_limit_switch_status() {
+  // Read the state of each limit switch
+  int limit_switch_states[3];
+  limit_switch_states[0] = digitalRead(LS1_NC); // Limit switch 1
+  limit_switch_states[1] = digitalRead(LS2_NC); // Limit switch 2
+  limit_switch_states[2] = digitalRead(LS3_NC); // Limit switch 3
+
+  // Publish debug messages for triggered limit switches
+  char debug_msg[128];
+  if (limit_switch_states[0] == HIGH) {
+    snprintf(debug_msg, sizeof(debug_msg), "Limit Switch 1 triggered!");
+    publish_debug_message(debug_msg);
+  }
+  if (limit_switch_states[1] == HIGH) {
+    snprintf(debug_msg, sizeof(debug_msg), "Limit Switch 2 triggered!");
+    publish_debug_message(debug_msg);
+  }
+  if (limit_switch_states[2] == HIGH) {
+    snprintf(debug_msg, sizeof(debug_msg), "Limit Switch 3 triggered!");
+    publish_debug_message(debug_msg);
+  }
 }
 
 // === Setup ===
@@ -103,6 +134,15 @@ void setup() {
   Serial.begin(115200);
   set_microros_serial_transports(Serial);
   delay(2000);
+
+  // Configure limit switch pins as inputs
+  pinMode(LS1_NO, INPUT_PULLUP); // Normally open pin for Limit Switch 1
+  pinMode(LS2_NO, INPUT_PULLUP); // Normally open pin for Limit Switch 2
+  pinMode(LS3_NO, INPUT_PULLUP); // Normally open pin for Limit Switch 3
+
+  pinMode(LS1_NC, INPUT_PULLUP); // Normally closed pin for Limit Switch 1
+  pinMode(LS2_NC, INPUT_PULLUP); // Normally closed pin for Limit Switch 2
+  pinMode(LS3_NC, INPUT_PULLUP); // Normally closed pin for Limit Switch 3
 
   // Attach servos
   servo1.attach(SERVO1_PIN);
@@ -190,6 +230,9 @@ void setup() {
     &joint_state_callback,
     ON_NEW_DATA));
 
+  // Home all motors
+  home_motors(); 
+
   // Publish debug message
   publish_debug_message("PSM Sensor Node ready and listening!");
 
@@ -202,6 +245,7 @@ void loop() {
   sensor_data_msg.data.data[1] = Enc2.read();
   sensor_data_msg.data.data[2] = Enc3.read();
   RCSOFTCHECK(rcl_publish(&sensor_data_publisher, &sensor_data_msg, NULL));
+
 
 
   // Spin executor

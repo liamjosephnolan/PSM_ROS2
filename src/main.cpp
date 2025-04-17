@@ -250,11 +250,16 @@ void loop() {
   RCSOFTCHECK(rcl_publish(&sensor_data_publisher, &sensor_data_msg, NULL));
 
   // Publish current angle
-  publish_debug_message(("Axis 1: Angle: " + String(Ax1toAngle(Enc1.read()))).c_str());
+  publish_debug_message(("Axis 2: Angle: " + String(Ax2toAngle(Enc2.read()))).c_str());
 
-  // Control axis 1 to -10 degrees
-  float target = -10.0;
-  PIDupdate(&target, 0, "P", 35.0, 0.0, 0.0);
+  // Control axis 1 to -10 degrees:w
+  float target = 0;
+  PIDupdate(&target, 0, "PI", 35.0, 50.0, 5.0);
+
+  // Control axis 2 to -10 degrees
+  target = 0;
+  PIDupdate(&target, 1, "PI", 60, 110, 5.0);
+
 
   // Spin executor
   RCSOFTCHECK(rclc_executor_spin_some(&executor, 0));

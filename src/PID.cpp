@@ -111,6 +111,7 @@ void PIDupdate(float* target, int index, String mode, float kp, float ki, float 
 
     // Determine speed
     speed = (int)fabs(u);
+    publish_debug_message(("Speed: " + String(speed)).c_str());
     if (speed > 100) {
         speed = 100;
     }

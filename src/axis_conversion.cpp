@@ -13,7 +13,7 @@ float Ax1toAngle(long count) {
 float Ax2toAngle(long count) {
     float q;
     float trans = 13.333;
-    q = (-1) * (float)count * res_avago / trans;
+    q = ((-1)*((float)count / (res_avago * trans) * 360.0)) - 30; // Convert encoder count to angle in degrees
     return q;
 }
 

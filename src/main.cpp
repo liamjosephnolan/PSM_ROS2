@@ -16,6 +16,9 @@
 // Declare the home_motors function defined in homing.cpp
 extern void home_motors();
 
+// Declare the PIDupdate function
+void PIDupdate(float* target, int index, String mode, float kp, float ki, float kd);
+
 // === ROS 2 Stuff ===
 rcl_subscription_t joint_state_subscriber;
 rcl_publisher_t sensor_data_publisher;
@@ -246,9 +249,16 @@ void loop() {
   sensor_data_msg.data.data[2] = Enc3.read();
   RCSOFTCHECK(rcl_publish(&sensor_data_publisher, &sensor_data_msg, NULL));
 
+  // Publish current angle
+  publish_debug_message(("Axis 1: Angle: " + String(Ax1toAngle(Enc1.read()))).c_str());
 
+  // Control axis 1 to -10 degrees
+  float target = -10.0;
+  PIDupdate(&target, 0, "P", 35.0, 0.0, 0.0);
 
   // Spin executor
   RCSOFTCHECK(rclc_executor_spin_some(&executor, 0));
   delay(5);
 }
+
+void PIDupdate(float* target, int index, String mode, float kp, float ki, float kd);

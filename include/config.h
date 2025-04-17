@@ -1,6 +1,10 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 
+#include <Arduino.h>
+#include <Encoder.h> // Include the Encoder library
+#include "CytronMotorDriver.h" // Include the Cytron Motor Driver library
+
 // === Configuration ===
 // Define Pins
 #define ENC1_A 0
@@ -46,5 +50,32 @@
 
 #define JOINT_NAME_MAX 10
 #define NAME_LENGTH_MAX 30
+
+// Encoder resolution (counts per revolution)
+extern float res_avago;
+
+// Time step for PID calculations
+extern float dt;
+
+// Arrays for PID state variables
+extern float prev_e[3];
+extern float integral[3];
+extern float control_values[3];
+extern float sat_control_values[3];
+extern bool clamp_I[3];
+extern int m_speed[3];
+
+// Motor objects
+extern CytronMD motor[3];
+
+// Encoder objects
+extern Encoder Enc1;
+extern Encoder Enc2;
+extern Encoder Enc3;
+
+// Conversion functions
+float Ax1toAngle(long count);
+float Ax2toAngle(long count);
+float Ax3toAngle(long count);
 
 #endif // CONFIG_H

@@ -78,4 +78,7 @@ float Ax1toAngle(long count);
 float Ax2toAngle(long count);
 float Ax3toAngle(long count);
 
+// Declare the publish_debug_message function
+void publish_debug_message(const char *message);
+
 #endif // CONFIG_H

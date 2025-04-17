@@ -158,7 +158,13 @@ void setup() {
   servo2.write(servo_off[1]);
   servo3.write(servo_off[2]);
   servo4.write(servo_off[3]);
-  delay(1000);
+  
+  // Set PWM frequency for motor drivers so it wont make horrible sounds
+  float PWM_freq = 18500.0;
+  analogWriteFrequency(DC1_PWM,PWM_freq);
+  analogWriteFrequency(DC2_PWM,PWM_freq);
+  analogWriteFrequency(DC3_PWM,PWM_freq);
+
 
   // Initialize micro-ROS
   allocator = rcl_get_default_allocator();
@@ -248,9 +254,6 @@ void loop() {
   sensor_data_msg.data.data[1] = Enc2.read();
   sensor_data_msg.data.data[2] = Enc3.read();
   RCSOFTCHECK(rcl_publish(&sensor_data_publisher, &sensor_data_msg, NULL));
-
-  // Publish current angle
-  publish_debug_message(("Axis 2: Angle: " + String(Ax2toAngle(Enc2.read()))).c_str());
 
   // Control axis 1 to -10 degrees:w
   float target = 0;

@@ -1,30 +1,28 @@
 #include <cmath>
-#include "config.h"
+#include "config.h"  // Keep your existing configuration
 
-void computePSMJointAngles(double x_p, double y_p, double z_p, double& q1_p, double& q2_p, double& q3_p) {
-    const double d0 = -23.49; // Distance constant
 
-    int sign = (y_p < 0) ? 1 : -1;
+double constrain_value(double value, double min_val, double max_val) {
+    return (value < min_val) ? min_val : (value > max_val) ? max_val : value;
+}
 
-    // Compute q3 (insertion)
-    q3_p = sign * std::sqrt(x_p * x_p + y_p * y_p + z_p * z_p) - d0;
+void computePSMJointAngles(double x_p, double y_p, double z_p, 
+        double& q1_p, double& q2_p, double& q3_p) {
+    // Apply the transformations
+    double x = -x_p*1000;      // Invert X
+    double y = z_p*1000;       // Swap Y and Z
+    double z = y_p*1000;
+    publish_debug_message("x: %f, y: %f, z: %f", x, y, z);
 
-    // Compute q2 (pitch)
-    double s2 = -x_p / (d0 + q3_p);
-    double c2 = std::sqrt(1 - s2 * s2);
-    q2_p = std::atan2(s2, c2);
-    if ((q2_p <= (-PI / 2)) || (q2_p >= (PI / 2))) {
-        q2_p = std::atan2(s2, -c2);
-    }
-    q2_p *= (180.0 / PI);  // Convert to degrees
+    
+    // Insertion distance (Euclidean distance)
+    q3_p = std::sqrt(x * x + y * y + z * z);
 
-    // Compute q1 (yaw)
-    double b = c2 * (q3_p + d0);
-    double a = -b;
-    double c = y_p + z_p;
-    q1_p = std::atan2(b, a) + std::atan2(std::sqrt(a * a + b * b - c * c), c);
-    if ((q1_p <= (-PI / 2)) || (q1_p >= (PI / 2))) {
-        q1_p = std::atan2(b, a) - std::atan2(std::sqrt(a * a + b * b - c * c), c);
-    }
-    q1_p *= (180.0 / PI);  // Convert to degrees
+    // Pitch angle in degrees (angle in XZ-plane) constrained to [-35, 35]
+    q2_p = std::atan2(x, y) * 180.0 / M_PI;
+    q2_p = constrain(q2_p, -10.0, 10.0); // These are currently over constrained to not break the robot normal are -35 35
+
+    // Yaw angle in degrees (angle in XY-plane) constrained to [-30, 30]
+    q1_p = std::atan2(z, y) * 180.0 / M_PI;
+    q1_p = constrain(q1_p, -10.0, 10.0); // These are currently over constrained to not break the robot normal are -30 30
 }

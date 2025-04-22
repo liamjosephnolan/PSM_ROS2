@@ -4,6 +4,8 @@
 #include <Arduino.h>
 #include <Encoder.h> // Include the Encoder library
 #include "CytronMotorDriver.h" // Include the Cytron Motor Driver library
+#include <cmath>
+#include <cstdio>
 
 // === Configuration ===
 // Define Pins
@@ -77,6 +79,16 @@ extern Encoder Enc3;
 float Ax1toAngle(long count);
 float Ax2toAngle(long count);
 float Ax3toAngle(long count);
+
+// Define a struct to hold the joint angles (use float to match PIDupdate)
+struct JointAngles {
+    float q1;  // Yaw
+    float q2;  // Pitch
+    float q3;  // Insertion
+};
+
+// Function declaration for computing joint angles
+JointAngles computePSMJointAngles(double x_p, double y_p, double z_p);
 
 // Declare the publish_debug_message function
 void publish_debug_message(const char *message);

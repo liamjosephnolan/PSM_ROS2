@@ -20,7 +20,6 @@
 // External functions
 extern void home_motors();
 void PIDupdate(float* target, int index, String mode, float kp, float ki, float kd);
-void computePSMJointAngles(double x, double y, double z, double &q1, double &q2, double &q3);
 
 // === ROS 2 Stuff ===
 rcl_subscription_t joint_state_subscriber;
@@ -106,18 +105,20 @@ void joint_state_callback(const void *msgin) {
 
 // === /target_pose Callback ===
 void target_pose_callback(const void *msgin) {
-  const geometry_msgs__msg__PoseStamped *msg = (const geometry_msgs__msg__PoseStamped *)msgin;
+    const geometry_msgs__msg__PoseStamped *msg = (const geometry_msgs__msg__PoseStamped *)msgin;
 
-  double x = msg->pose.position.x;
-  double y = msg->pose.position.y;
-  double z = msg->pose.position.z;
+    // Extract target pose coordinates
+    double x = msg->pose.position.x;
+    double y = msg->pose.position.y;
+    double z = msg->pose.position.z;
 
-  double q1, q2, q3;
-  computePSMJointAngles(x, y, z, q1, q2, q3);
+    // Call computePSMJointAngles with three arguments and get the result as a JointAngles struct
+    JointAngles angles = computePSMJointAngles(x, y, z);
 
-  char debug_buf[128];
-  snprintf(debug_buf, sizeof(debug_buf), "TargetPose -> q1: %.2f, q2: %.2f, q3: %.2f", q1, q2, q3);
-  publish_debug_message(debug_buf);
+    // Publish a debug message with the computed joint angles
+    char debug_buf[128];
+    snprintf(debug_buf, sizeof(debug_buf), "TargetPose -> q1: %.2f, q2: %.2f, q3: %.2f", angles.q1, angles.q2, angles.q3);
+    publish_debug_message(debug_buf);
 }
 
 // === Setup ===
@@ -216,18 +217,41 @@ void setup() {
 
   // Home motors
   home_motors();
-  publish_debug_message("PSM Sensor Node ready and listening!");
 }
 
 // === Main Loop ===
 void loop() {
-  sensor_data_msg.data.data[0] = Enc1.read();
-  sensor_data_msg.data.data[1] = Enc2.read();
-  sensor_data_msg.data.data[2] = Enc3.read();
-  RCSOFTCHECK(rcl_publish(&sensor_data_publisher, &sensor_data_msg, NULL));
+    // 1. Read encoder values and publish sensor data
+    sensor_data_msg.data.data[0] = Enc1.read();
+    sensor_data_msg.data.data[1] = Enc2.read();
+    sensor_data_msg.data.data[2] = Enc3.read();
+    RCSOFTCHECK(rcl_publish(&sensor_data_publisher, &sensor_data_msg, NULL));
 
+    // 2. Process any incoming ROS messages
+    RCSOFTCHECK(rclc_executor_spin_some(&executor, 0));
 
+    // 3. Get target pose coordinates (in double precision)
+    double x_target = target_pose_msg.pose.position.x;
+    double y_target = target_pose_msg.pose.position.y;
+    double z_target = target_pose_msg.pose.position.z;
 
-  RCSOFTCHECK(rclc_executor_spin_some(&executor, 0));
-  delay(5);
+    // 4. Compute the desired joint angles 
+    // (computePSMJointAngles returns a JointAngles struct declared in config.h)
+    JointAngles desiredAngles = computePSMJointAngles(x_target, y_target, z_target);
+
+    // Optional: Publish a debug message with the computed angles
+    char debugBuf[128];
+    snprintf(debugBuf, sizeof(debugBuf), "Desired Angles -> q1: %.2f, q2: %.2f, q3: %.2f",
+             desiredAngles.q1, desiredAngles.q2, desiredAngles.q3);
+    publish_debug_message(debugBuf);
+
+    // 5. Use the PID controllers to drive the joints toward the computed angles.
+    // PIDupdate takes a pointer to a float target value.
+    // Ensure you pass the addresses of desiredAngles.q1 (and .q2, etc.)
+    PIDupdate(&desiredAngles.q1, 0, "PI", 35.0f, 50.0f, 5.0f);
+    PIDupdate(&desiredAngles.q2, 1, "PI", 60.0f, 110.0f, 0.0f);
+    // If you have a PID for the third joint (e.g., insertion), you could add:
+    // PIDupdate(&desiredAngles.q3, 2, "PI", <kp>, <ki>, <kd>);
+
+    delay(10);  // Small delay for loop timing
 }

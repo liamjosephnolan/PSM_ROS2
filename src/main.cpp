@@ -248,8 +248,8 @@ void loop() {
     // 5. Use the PID controllers to drive the joints toward the computed angles.
     // PIDupdate takes a pointer to a float target value.
     // Ensure you pass the addresses of desiredAngles.q1 (and .q2, etc.)
-    PIDupdate(&desiredAngles.q1, 0, "PI", 35.0f, 50.0f, 5.0f);
-    PIDupdate(&desiredAngles.q2, 1, "PI", 60.0f, 110.0f, 0.0f);
+    PIDupdate(&desiredAngles.q1, 0, "PID", 20.0f, 50.0f, 0.50f);
+    PIDupdate(&desiredAngles.q2, 1, "PI", 60.0f, 110.0f, 0.50f);
     // If you have a PID for the third joint (e.g., insertion), you could add:
     // PIDupdate(&desiredAngles.q3, 2, "PI", <kp>, <ki>, <kd>);
 

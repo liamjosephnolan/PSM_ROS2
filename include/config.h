@@ -2,13 +2,48 @@
 #define CONFIG_H
 
 #include <Arduino.h>
-#include <Encoder.h> // Include the Encoder library
-#include "CytronMotorDriver.h" // Include the Cytron Motor Driver library
+
+// ----------------------
+// Macros for Error Handling
+// ----------------------
+#define RCCHECK(fn) { rcl_ret_t rc = fn; if (rc != RCL_RET_OK) error_loop(); }
+#define RCSOFTCHECK(fn) { rcl_ret_t rc = fn; if (rc != RCL_RET_OK) {} }
+
+// ----------------------
+// Arduino and Hardware Libraries
+// ----------------------
+#include <Encoder.h>
+#include <Servo.h>
+#include "CytronMotorDriver.h"
+
+// ----------------------
+// ROS 2 and micro-ROS Libraries
+// ----------------------
+#include <micro_ros_platformio.h>
+#include <rcl/rcl.h>
+#include <rclc/rclc.h>
+#include <rclc/executor.h>
+#include <std_msgs/msg/int32_multi_array.h>
+#include <sensor_msgs/msg/joint_state.h>
+#include <std_msgs/msg/string.h>
+#include <geometry_msgs/msg/pose_stamped.h>
+#include <rosidl_runtime_c/string_functions.h>
+
+// ----------------------
+// Custom ROS 2 Messages
+// ----------------------
+#include <psm_msg/msg/psm_tele.h>
+
+// ----------------------
+// C/C++ Standard Libraries
+// ----------------------
 #include <cmath>
 #include <cstdio>
+#include <cstring>
 
-// === Configuration ===
-// Define Pins
+// ----------------------
+// Pin Definitions
+// ----------------------
 #define ENC1_A 0
 #define ENC1_B 1
 #define ENC2_A 2
@@ -31,13 +66,12 @@
 #define LS3_NC 18
 #define LS3_NO 19
 
-#define SERVO1_PIN 9  // Right grasper finger
-#define SERVO2_PIN 10 // Left grasper finger
-#define SERVO3_PIN 11 // Wrist roll
-#define SERVO4_PIN 12 // Wrist pitch
+#define SERVO1_PIN 9   // Right grasper finger
+#define SERVO2_PIN 10  // Left grasper finger
+#define SERVO3_PIN 11  // Wrist roll
+#define SERVO4_PIN 12  // Wrist pitch
 
-// Gimbal angle ranges (adjustable)
-#define G0_MIN 0 //TODO Fix G0 angle stuff
+#define G0_MIN 0    // TODO: Fix G0 angle stuff
 #define G0_MAX 75
 #define G1_MIN -40
 #define G1_MAX 40
@@ -46,12 +80,15 @@
 #define G3_MIN -125 
 #define G3_MAX 125
 
-// Servo angle range
 #define SERVO_ANGLE_MIN -360
 #define SERVO_ANGLE_MAX 360
 
 #define JOINT_NAME_MAX 10
 #define NAME_LENGTH_MAX 30
+
+// ----------------------
+// Global/External Variables
+// ----------------------
 
 // Encoder resolution (counts per revolution)
 extern float res_avago;
@@ -75,10 +112,13 @@ extern Encoder Enc1;
 extern Encoder Enc2;
 extern Encoder Enc3;
 
-// Conversion functions
-float Ax1toAngle(long count);
-float Ax2toAngle(long count);
-float Ax3toAngle(long count);
+// ROS 2 global objects
+extern std_msgs__msg__String debug_msg;
+extern rcl_publisher_t debug_publisher;
+
+// ----------------------
+// Struct Definitions
+// ----------------------
 
 // Define a struct to hold the joint angles (use float to match PIDupdate)
 struct JointAngles {
@@ -87,10 +127,30 @@ struct JointAngles {
     float q3;  // Insertion
 };
 
-// Function declaration for computing joint angles
-JointAngles computePSMJointAngles(double x_p, double y_p, double z_p);
+// ----------------------
+// Function Declarations
+// ----------------------
 
-// Declare the publish_debug_message function
-void publish_debug_message(const char *message);
+// Axis conversion functions
+extern float Ax1toAngle(long count);
+extern float Ax2toAngle(long count);
+extern float Ax3toAngle(long count);
+
+// Helper functions
+extern void publish_debug_message(const char *message);
+extern int map_gimbal_to_servo(double gimbal_angle, double gimbal_min, double gimbal_max, double max_angle, double min_angle);
+
+// Joint angle computation
+extern JointAngles computePSMJointAngles(double x_p, double y_p, double z_p);
+
+// Error handling
+extern void error_loop();
+
+// Encoder data reading
+extern void read_encoder_data(sensor_msgs__msg__JointState *msg);
+
+// Motor control
+extern void home_motors();
+extern void PIDupdate(float *target, int index, String mode, float kp, float ki, float kd);
 
 #endif // CONFIG_H

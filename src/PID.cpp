@@ -1,6 +1,8 @@
 #include "config.h"
-#include <math.h>
-#include <Arduino.h>
+
+// ----------------------
+// Global Variables
+// ----------------------
 
 // Define global variables used in PID calculations
 float dt = 0.01; // Time step for PID calculations
@@ -11,13 +13,17 @@ float sat_control_values[3] = {0, 0, 0}; // Saturated control values for each ax
 bool clamp_I[3] = {false, false, false}; // Clamping flags for each axis
 int m_speed[3] = {0, 0, 0}; // Motor speeds for each axis
 
-// PID update function
+// ----------------------
+// PID Update Function
+// ----------------------
+
+// Updates the PID controller for a given axis
 void PIDupdate(float* target, int index, String mode, float kp, float ki, float kd) {
     // Function variables
     float current;
     int PID_select;
-    float u;
-    float e;
+    float u; // Control signal
+    float e; // Error
     int sign_e;
     int sign_u;
     float clamp_Lim_up;
@@ -40,17 +46,17 @@ void PIDupdate(float* target, int index, String mode, float kp, float ki, float 
 
     // Choose parameters based on index
     switch (index) {
-        case 0:
+        case 0: // Axis 1
             current = Ax1toAngle(Enc1.read());
             clamp_Lim_up = 32;
             clamp_Lim_low = -32;
             break;
-        case 1:
+        case 1: // Axis 2
             current = Ax2toAngle(Enc2.read());
             clamp_Lim_up = 40;
             clamp_Lim_low = -40;
             break;
-        case 2:
+        case 2: // Axis 3
             current = Ax3toAngle(Enc3.read());
             clamp_Lim_up = 7;
             clamp_Lim_low = -7;
@@ -73,8 +79,7 @@ void PIDupdate(float* target, int index, String mode, float kp, float ki, float 
 
         case 1: // PI-mode
             if (!clamp_I[index]) {
-                // Integrator
-                integral[index] += e * dt;
+                integral[index] += e * dt; // Integrator
                 u = kp * e + ki * integral[index];
             } else {
                 u = kp * e;
@@ -87,8 +92,7 @@ void PIDupdate(float* target, int index, String mode, float kp, float ki, float 
 
         case 3: // PID-mode
             if (!clamp_I[index]) {
-                // Integrator
-                integral[index] += e * dt;
+                integral[index] += e * dt; // Integrator
                 u = kp * e + ki * integral[index] + kd * (e - prev_e[index]) / dt;
             } else {
                 u = kp * e + kd * (e - prev_e[index]) / dt;
@@ -116,6 +120,7 @@ void PIDupdate(float* target, int index, String mode, float kp, float ki, float 
         speed = 100;
     }
 
+    // Minimum speed for Axis 3
     if ((speed < 8) && (index == 2)) {
         speed = 8;
     }

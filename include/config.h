@@ -147,7 +147,7 @@ extern JointAngles computePSMJointAngles(double x_p, double y_p, double z_p);
 extern void error_loop();
 
 // Encoder data reading
-extern void read_encoder_data(sensor_msgs__msg__JointState *msg);
+extern void read_encoder_data(std_msgs__msg__Int32MultiArray *msg);
 
 // Motor control
 extern void home_motors();

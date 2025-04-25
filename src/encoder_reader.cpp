@@ -13,13 +13,10 @@ Encoder Enc3(ENC3_B, ENC3_A);
 // Encoder Reading Function
 // ----------------------
 
-// Reads encoder data and populates the ROS 2 JointState message
-void read_encoder_data(sensor_msgs__msg__JointState *msg) {
-    // Read encoder values
-    msg->position.data[0] = Enc1.read();
-    msg->position.data[1] = Enc2.read();
-    msg->position.data[2] = Enc3.read();
-
-    // Ensure the size matches the number of encoders
-    msg->position.size = 3;
+// Reads encoder data and populates the ROS 2 Int32MultiArray message
+void read_encoder_data(std_msgs__msg__Int32MultiArray *msg) {
+    msg->data.data[0] = Enc1.read();
+    msg->data.data[1] = Enc2.read();
+    msg->data.data[2] = Enc3.read();
+    msg->data.size = 3; // Ensure the size matches the number of encoders
 }
